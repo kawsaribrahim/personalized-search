@@ -1,48 +1,76 @@
 <template>
   <div>
-    <v-text-field v-model="query" label="Search" outlined></v-text-field>
-    <v-btn @click="search" color="primary">Search</v-btn>
-    <v-container>
-      <v-row v-if="searchResults.length > 0">
-        <v-col cols="12">
-          <h3>Search Results:</h3>
-          <v-list>
-            <v-list-item v-for="result in searchResults" :key="result.id">
-              <v-list-item-content>
-                <v-list-item-title>{{ result._source.title }}</v-list-item-title>
-                <v-list-item-subtitle>{{ result._source.score }}</v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-          </v-list>
-        </v-col>
-      </v-row>
-    </v-container>
+    <div class="search">
+      <v-text-field v-model="query" label="Search" @keyup.enter="onSearch" class="input mx-5 my-2" outlined></v-text-field>
+      <v-btn @click="onSearch" color="primary" large class="my-4 px-2">
+        <v-icon medium >mdi-magnify</v-icon>
+      </v-btn>
+      
+    </div>
+    <div v-if="!selectedResult && selectedResult === null" class="search"> {{ searchResults.length }} Search Results </div>
+    <div class="content-center">
+      <v-card v-if="!selectedResult && selectedResult === null">
+        <v-card-text v-if="msg">
+        {{ msg }}
+      </v-card-text>
+      <v-simple-table v-if="searchResults.length > 0" class="width"> 
+        <template v-slot:default>
+          <tbody>
+            <tr
+              v-for="result in searchResults"
+              :key="result.id"
+            >
+              <td @click="showResult(result)" class="clickable content-center pt-3">
+                {{ result._source.title }},
+                <v-spacer/>
+                {{ result._score }}
+              </td>
+            </tr>
+          </tbody>
+        </template>
+      </v-simple-table>
+      </v-card>
+      <v-card v-else class="width">
+        <v-card-title class="content-center">
+          <v-icon @click="selectedResult = null" large class="pr-5" >mdi-arrow-left</v-icon>
+          {{ selectedResult._source.title}}
+        </v-card-title>
+        <v-card-text>
+          {{ selectedResult._source.text}}
+          <i class="mt-2">{{ selectedResult._source.timestamp}}</i>
+        </v-card-text>
+      </v-card>
+    </div>
   </div>
 </template>
 
 <script>
 export default {
   name: 'SearchView',
+  props: {
+        user: String,
+      },
   data() {
     return {
       query: '',
-      selectedUser: null,
+      msg: '',
+      selectedResult: null,
       searchResults: [], // Array to hold search results
-      FLASK_SERVER_URL: 'http://localhost:5000'
+      FLASK_SERVER_URL: 'http://127.0.0.1:5000'
     };
   },
   methods: {
-    // search() {
-    //   // Perform search using query and selectedUser
-    //   // Send request to backend API endpoint
-    //   // Update searchResults with the received search results
-    //   respone = getData()
-    //   this.searchResults = [
-    //     { id: 1, title: 'Search Result 1', description: 'Description of search result 1' },
-    //     { id: 2, title: 'Search Result 2', description: 'Description of search result 2' },
-    //     { id: 3, title: 'Search Result 3', description: 'Description of search result 3' }
-    //   ];
-    // },
+    onSearch() {
+      if (this.query.trim() !== '') {
+        this.msg = ''
+        this.search();
+      }
+      else {
+        this.searchResults = []
+        this.msg = 'No Search Results'
+      }
+        this.selectedResult = null
+    },
     async search() {
       try {
         const response = await fetch(`${this.FLASK_SERVER_URL}/api/search`, {
@@ -51,18 +79,51 @@ export default {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            index_name: 'document_index', // Change this to your actual index name
+            index_name: 'document_index',
             query: this.query
           }),
         });
         const data = await response.json();
-        console.log("data hits", data['hits']['hits']); // Log the parsed JSON data
-        console.log("data 0", data['hits']['hits'][0]._id); // Log the parsed JSON data
-        this.searchResults = data['hits']['hits']; // Assuming the response contains search results directly
+        this.searchResults = data['hits']['hits'];
+        if (this.searchResults.length < 1) {
+          this.msg = 'No Search Results'
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
       }
+    },
+    showResult(result) {
+      this.selectedResult = result
+      // TO-DO: Store in vuex store for each user
     }
   }
 };
 </script>
+
+<style>
+.search {
+  display: flex;
+  justify-content: center;
+  margin: 20px;
+}
+.input {
+  max-width: 700px;
+}
+.result {
+  display: flex;
+  justify-content: center;
+  max-width: 800px; /* Adjust the width as needed */
+}
+.content-center {
+  display: flex;
+  justify-content: center;
+}
+.width {
+  width: 800px; /* Adjust the width as needed */
+}
+.clickable {
+  cursor: pointer; /* Change cursor to pointer to indicate it's clickable */
+  color: blue; /* Change text color */
+  text-decoration: underline; /* Add underline to resemble a link */
+}
+</style>

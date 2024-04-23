@@ -6,31 +6,18 @@
       dark
     >
       <div class="d-flex align-center">
-        <v-img
-          alt="Vuetify Logo"
-          class="shrink mr-2"
-          contain
-          src="https://cdn.vuetifyjs.com/images/logos/vuetify-logo-dark.png"
-          transition="scale-transition"
-          width="40"
-        />
-
-        <v-img
-          alt="Vuetify Name"
-          class="shrink mt-1 hidden-sm-and-down"
-          contain
-          min-width="100"
-          src="https://cdn.vuetifyjs.com/images/logos/vuetify-name-dark.png"
-          width="100"
-        />
+        <v-icon large class="mx-2" >mdi-movie-search</v-icon>
+        <b>P-search</b>
       </div>
+
+      <v-spacer></v-spacer>
 
       <v-btn
         @click="changeUser('user1')"
         text
       >
         <v-icon>mdi-</v-icon>
-        <span class="ml-2">User 1</span>
+        <span>User 1</span>
       </v-btn>
       <v-btn
         @click="changeUser('user2')"
@@ -46,21 +33,10 @@
         <v-icon>mdi-</v-icon>
         <span class="">User 3</span>
       </v-btn>
-
-      <v-spacer></v-spacer>
-
-      <v-btn
-        href="https://github.com/vuetifyjs/vuetify/releases/latest"
-        target="_blank"
-        text
-      >
-        <span class="mr-2">Latest Release</span>
-        <v-icon>mdi-open-in-new</v-icon>
-      </v-btn>
     </v-app-bar>
 
-    <v-main>
-      <Search/>
+    <v-main class="mt-3">
+      <Search @user="user"/>
     </v-main>
   </v-app>
 </template>
@@ -76,12 +52,13 @@ export default {
   },
 
   data: () => ({
-    //
+    user: '',
   }),
   methods: {
-    changeUser(user) {
+    changeUser(otherUser) {
       //TO-DO: save user info
-      console.log("Changed user to", user)
+      this.user = otherUser
+      console.log("Changed user to", otherUser)
     }
   }
 };
