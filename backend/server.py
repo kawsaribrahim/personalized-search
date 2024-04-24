@@ -13,7 +13,9 @@ class Server:
     A Server class to interact with the elastic search server
     """
 
-    def __init__(self):
+    def __init__(self, index_name, file_name):
+        self.index_name = index_name
+
         try:
             from config import address, fingerprint, password
         except ImportError:
@@ -21,49 +23,49 @@ class Server:
             sys.exit(1)
 
         self.client = Elasticsearch(address, ssl_assert_fingerprint=fingerprint, basic_auth=("elastic", password))
-
-    def create_index(self, index_name):
-        if not self.client.indices.exists(index=index_name):
-            self.client.indices.create(index=index_name)
-            try:
-                print("Indexing documents...")
-                print(os.getcwd())
-                
-                count = 0
-                for root, dirs, files in os.walk("../davisWiki"):
-                    
-                    for file in files:
-                        with open(os.path.join(root, file), "r", encoding="utf-8") as f:
-                            try:
-                                title = file
-                                text = f.read()
-                                doc = {
-                                    "title": title,
-                                    "text": text,
-                                    "timestamp": datetime.now()
-                                }
-                                count += 1
-                                self.client.index(index="document_index", id=count, document=doc)
-                                if count % 5000 == 0:
-                                    print(f"Processing document {count}")
-                                
-                            except Exception as e:
-                                print(e)
-                                print("title: ", title)
-                                break
-
-                print(f"Processing document {count}") 
-                print("done")
-            except Exception as e:
-                print("Error while indexing")
-                print(e)
-            print(f"Index '{index_name}' created successfully.")
+        
+        if self.client.indices.exists(index=index_name):
+            if (input("Do you want to delete the contents of the index? (y/n) ") in "yY"):
+                self.client.indices.delete(index=self.index_name)
+                self.client.indices.create(index=self.index_name)
+                self.fill_index(self.index_name, file_name)
         else:
-            print(f"Index '{index_name}' already exists.")
+            self.client.indices.create(index=self.index_name)
+            self.fill_index(self.index_name, file_name)
 
-    def index_document(self, index_name, document):
-        response = self.client.index(index=index_name, body=document)
-        return response
+    def fill_index(self, index_name, file_name):
+        try:
+            print("Indexing documents...")
+            print(os.getcwd())
+
+            count = 0
+            for root, dirs, files in os.walk(file_name):
+
+                for file in files:
+                    with open(os.path.join(root, file), "r", encoding="utf-8") as f:
+                        try:
+                            title = file
+                            text = f.read()
+                            doc = {
+                                "title": title,
+                                "text": text,
+                                "timestamp": datetime.now()
+                            }
+                            count += 1
+                            self.client.index(index="document_index", id=count, document=doc)
+                            if count % 5000 == 0:
+                                print(f"Processing document {count}")
+
+                        except Exception as e:
+                            print(e)
+                            print("title: ", title)
+                            break
+            print(f"Processing document {count}")
+            print("done")
+        except Exception as e:
+            print("Error while indexing")
+            print(e)
+        print(f"Index '{index_name}' created successfully.")
 
     def search(self, index_name, query):
         response = self.client.search(index=index_name, body=query)
@@ -71,22 +73,7 @@ class Server:
 
 
 # App Implementation
-es_server = Server()
-
-@app.route('/api/index/create', methods=['POST'])
-def create_index():
-    data = request.get_json()
-    index_name = data.get('index_name')
-    es_server.create_index(index_name)
-    return jsonify({'message': f"Index '{index_name}' created successfully."})
-
-@app.route('/api/index/document', methods=['POST'])
-def index_document():
-    data = request.get_json()
-    index_name = data.get('index_name')
-    document = data.get('document')
-    response = es_server.index_document(index_name, document)
-    return jsonify(dict(response))
+es_server = Server("document_index", "../davisWiki")
 
 @app.route('/api/search', methods=['POST'])
 def search():
