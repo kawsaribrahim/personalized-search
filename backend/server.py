@@ -108,7 +108,6 @@ def search():
         "size": 10000
     }
     response = es_server.search(index_name, body)
-    print(response["hits"]["hits"][0]["_source"]["title"])
     return jsonify(dict(response))
 
 if __name__ == '__main__':
