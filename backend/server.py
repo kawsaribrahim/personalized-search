@@ -1,15 +1,33 @@
 from elasticsearch import Elasticsearch
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
 from itertools import chain
 import time
+import sqlite3
 import sys
 from pprint import pprint
 import os
 
 app = Flask(__name__)
 cors = CORS(app, resources={r"/api/*": {"origins": "http://localhost:8080"}})
+
+# Database to store click histories
+history_db = sqlite3.connect("history.db", check_same_thread=False)
+hist_cur = history_db.cursor()
+if len(hist_cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='history'").fetchall()) == 0:
+    hist_cur.execute("CREATE TABLE history (HISTORY_ID INTEGER PRIMARY KEY AUTOINCREMENT, USER_ID INTEGER, ARTICLE INTEGER)")
+    history_db.commit()
+
+# Database to store query histories
+query_db = sqlite3.connect("queries.db", check_same_thread=False)
+quer_cur = query_db.cursor()
+if len(quer_cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='queries'").fetchall()) == 0:
+    quer_cur.execute("CREATE TABLE queries (QUERY_ID INTEGER PRIMARY KEY AUTOINCREMENT, USER_ID INTEGER, QUERY TEXT)")
+    query_db.commit()
+
+print(quer_cur.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
 
 class Server:
     """ 
@@ -33,36 +51,29 @@ class Server:
                 self.create_fill(self.index_name, file_name)
         else:
             self.create_fill(self.index_name, file_name)
+        
+        if (len(hist_cur.execute("SELECT HISTORY_ID FROM history").fetchall()) != 0 or
+           len(quer_cur.execute("SELECT QUERY_ID FROM queries").fetchall()) != 0):
+            if (input("Do you want to delete the contents of the database? (y/n) ") in "yY"):
+                hist_cur.execute("DELETE FROM history")
+                history_db.commit()
+                quer_cur.execute("DELETE FROM queries")
+                query_db.commit()
+                
+            print("There are ", len(hist_cur.execute("SELECT HISTORY_ID FROM history").fetchall()), " entries in the history table.")
+            print("There are ", len(quer_cur.execute("SELECT QUERY_ID FROM queries").fetchall()), " entries in the query table.")
     
     def create_fill(self, index_name, file_name):
-
+        
         body = {
-            "settings": {
-                "similarity": {
-                    "personalized_similarity": {
-                        "type": "scripted",
-                        "script": { 
-                            "source": """double tf = Math.sqrt(doc.freq); 
-                                    double idf = Math.log((field.docCount+1.0)/(term.docFreq+1.0)) + 1.0; 
-                                    double norm = 1/Math.sqrt(doc.length); 
-                                    double boost = 2.2;
-                                    return boost * tf * idf * norm;""",
-                        }
-                    }
-                }
-            },
             "mappings": {
                 "properties": {
-                    "text": {
-                        "type": "text",
-                        "similarity": "personalized_similarity",
-                        "fields": {
-                            "keyword": {
-                            "type": "keyword",
-                            "ignore_above": 256
-                            }
-                        }
-                    }
+                    "title": {"type": "text"},
+                    "text": {"type": "text"},
+                    "timestamp": {"type": "date"},
+                    "p1": {"type": "float"},
+                    "p2": {"type": "float"},
+                    "p3": {"type": "float"}
                 }
             }
         }
@@ -87,7 +98,10 @@ class Server:
                         doc = {
                             "title": title,
                             "text": text,
-                            "timestamp": datetime.now()
+                            "timestamp": datetime.now(),
+                            "p1": 0,
+                            "p2": 0,
+                            "p3": 0
                         }
                         count += 1
                         docs[count] = doc
@@ -128,8 +142,26 @@ class Server:
 
     def search(self, index_name, query):
         response = self.client.search(index=index_name, body=query)
+        
+        print(query["query"]["script_score"]["query"]["match"]["text"])
+        # log query
+        self.log_query(1, query["query"]["script_score"]["query"]["match"]["text"])
 
         return response
+    
+    def log_query(self, user, query):
+        quer_cur = query_db.cursor()
+        quer_cur.execute("INSERT INTO queries (USER_ID, QUERY) VALUES (?, ?)", (user, query))
+        query_db.commit()
+        
+        print("There are ", len(quer_cur.execute("SELECT QUERY_ID FROM queries").fetchall()), " entries in the query table.")
+
+    def log_click(self, user, result):
+        hist_cur = history_db.cursor()
+        hist_cur.execute("INSERT INTO history (USER_ID, ARTICLE) VALUES (?, ?)", (user, result))
+        history_db.commit()
+        
+        print("There are ", len(hist_cur.execute("SELECT HISTORY_ID FROM history").fetchall()), " entries in the history table.")
     
 
 
@@ -144,17 +176,36 @@ def search():
     query = data.get('query')
     
     body={"query": {
-        "match": {
-            "text": query,
-    }}, "size": 30, "explain": True}
+        "script_score": {
+            "query": {
+                "match": {
+                    "text": query
+                }
+            },
+            "script": {
+                "source": "_score + 1 * doc['p1'].value + 0 * doc['p2'].value + 0 * doc['p3'].value"
+            }
+        }
+    }, "size": 100, "explain": True}    
     
     response = es_server.search(index_name, body)
-    pprint([ i["_source"]["title"] for i in response["hits"]["hits"]])
-    pprint([ i["_score"] for i in response["hits"]["hits"]])
-    pprint(response["hits"]["hits"][0])
 
 
     return jsonify(dict(response))
+
+
+@app.route('/api/click', methods=['POST'])
+def log_click():
+    # To-Do: Current assumption is user 1 is logging
+    data = request.get_json()
+    print("Clicked detected:")
+    pprint(data["result"]["_id"])
+    
+    es_server.log_click(1, data["result"]["_id"])
+    
+    return jsonify({"status": "success"})
+    
+    
 
 if __name__ == '__main__':
     app.run(debug=True)
