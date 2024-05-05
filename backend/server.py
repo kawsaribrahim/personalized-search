@@ -3,7 +3,6 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
 import sys
-# import os
 import csv
 
 app = Flask(__name__)
@@ -37,31 +36,8 @@ class Server:
     def fill_index(self, index_name, file_name):
         try:
             print("Indexing documents...")
-            # print(os.getcwd())
 
             count = 0
-            # for root, dirs, files in os.walk(file_name):
-
-            #     for file in files:
-            #         with open(os.path.join(root, file), "r", encoding="utf-8") as f:
-            #             try:
-            #                 title = file
-            #                 text = f.read()
-            #                 doc = {
-            #                     "title": title,
-            #                     "text": text,
-            #                     "timestamp": datetime.now()
-            #                 }
-            #                 count += 1
-            #                 self.client.index(index="document_index", id=count, document=doc)
-            #                 if count % 5000 == 0:
-            #                     print(f"Processing document {count}")
-
-            #             except Exception as e:
-            #                 print(e)
-            #                 print("title: ", title)
-            #                 break
-            
             with open(file_name, 'r', newline='', encoding="utf-8") as csvfile:
                 try:
                     reader = csv.reader(csvfile)
