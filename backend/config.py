@@ -11,3 +11,9 @@ fingerprint = ""
 
 # Enrollment token:
 enrollment = ""
+
+# Index name:
+index = 'document_index'
+
+# file containing the data being saved in the index:
+data_file = '../data.csv'

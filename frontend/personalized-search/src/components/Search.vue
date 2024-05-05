@@ -36,7 +36,7 @@
           {{ selectedResult._source.title}}
         </v-card-title>
         <v-card-text>
-          {{ selectedResult._source.text}}
+          {{ selectedResult._source.description}}
           <i class="mt-2">{{ selectedResult._source.timestamp}}</i>
         </v-card-text>
       </v-card>
@@ -45,6 +45,8 @@
 </template>
 
 <script>
+// import {address, index} from '../../../../../backend/config.py'
+
 export default {
   name: 'SearchView',
   props: {
@@ -56,7 +58,8 @@ export default {
       msg: '',
       selectedResult: null,
       searchResults: [], // Array to hold search results
-      FLASK_SERVER_URL: 'http://127.0.0.1:5000'
+      FLASK_SERVER_URL: 'http://127.0.0.1:5000',
+      INDEX_NAME: 'document_index'
     };
   },
   methods: {
@@ -79,7 +82,7 @@ export default {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            index_name: 'document_index',
+            index_name: this.INDEX_NAME,
             query: this.query
           }),
         });
