@@ -2,6 +2,7 @@ from elasticsearch import Elasticsearch
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
+from itertools import chain
 import sys
 import csv
 
@@ -32,36 +33,52 @@ class Server:
         else:
             self.client.indices.create(index=self.index_name)
             self.fill_index(self.index_name, data_file)
+            
+    def csv_loop(self, file_name):
+        count = 0
+        docs = {}
+        BATCH = 800
+        
+        with open(file_name, 'r', newline='', encoding="utf-8") as csvfile:
+            try:
+                reader = csv.reader(csvfile)
+                for row in reader:
+                    if count == 0:
+                        count += 1
+                        continue
+                    title = row[0]
+                    description = row[1]
+                    link = row[2]
+                    doc = {
+                        "title": title,
+                        "description": description,
+                        "link": link,
+                        "timestamp": datetime.now()
+                    }
+                    count += 1
+                    docs[count] = doc
+                    if count % BATCH == 0:
+                        yield docs
+                        docs = {}
+                    if count % 5000 == 0:
+                        print(f"Processing document {count}")
+            except Exception as e:
+                print(e)
+                print("title: ", title)
+                
+        yield docs
+        print(f"Processing document {count}")
+        print("done")
 
     def fill_index(self, index_name, file_name):
         try:
             print("Indexing documents...")
 
-            count = 0
-            with open(file_name, 'r', newline='', encoding="utf-8") as csvfile:
-                try:
-                    reader = csv.reader(csvfile)
-                    for row in reader:
-                        title = row[0]
-                        description = row[1]
-                        link = row[2]
-                        doc = {
-                            "title": title,
-                            "description": description,
-                            "link": link,
-                            "timestamp": datetime.now()
-                        }
-                        count += 1
-                        self.client.index(index=index_name, id=count, document=doc)
-                        if count % 5000 == 0:
-                            print(f"Processing document {count}")
-
-                except Exception as e:
-                    print(e)
-                    print("title: ", title)
-                    
-            print(f"Processing document {count}")
-            print("done")
+            for i in self.csv_loop(file_name):
+                
+                body = list(chain.from_iterable(({"index": {"_index": index_name, "_id":j}}, k) for (j,k) in i.items()))
+                
+                resp = self.client.bulk(body=body)
                     
         except Exception as e:
             print("Error while indexing")
