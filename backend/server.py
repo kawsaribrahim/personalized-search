@@ -2,8 +2,9 @@ from elasticsearch import Elasticsearch
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
+from itertools import chain
 import sys
-import os
+import csv
 
 app = Flask(__name__)
 cors = CORS(app, resources={r"/api/*": {"origins": "http://localhost:8080"}})
@@ -13,55 +14,72 @@ class Server:
     A Server class to interact with the elastic search server
     """
 
-    def __init__(self, index_name, file_name):
-        self.index_name = index_name
+    def __init__(self):
 
         try:
-            from config import address, fingerprint, password
+            from config import data_file, index, address, fingerprint, password
         except ImportError:
             print("Server Error: config.py not found")
             sys.exit(1)
 
+        self.index_name = index
         self.client = Elasticsearch(address, ssl_assert_fingerprint=fingerprint, basic_auth=("elastic", password))
         
-        if self.client.indices.exists(index=index_name):
-            if (input("Do you want to delete the contents of the index? (y/n) ") in "yY"):
+        if self.client.indices.exists(index=self.index_name):
+            if (input("Do you want to delete the current index and create a new one? (y/n) ") in "yY"):
                 self.client.indices.delete(index=self.index_name)
                 self.client.indices.create(index=self.index_name)
-                self.fill_index(self.index_name, file_name)
+                self.fill_index(self.index_name, data_file)
         else:
             self.client.indices.create(index=self.index_name)
-            self.fill_index(self.index_name, file_name)
+            self.fill_index(self.index_name, data_file)
+            
+    def csv_loop(self, file_name):
+        count = 0
+        docs = {}
+        BATCH = 800
+        
+        with open(file_name, 'r', newline='', encoding="utf-8") as csvfile:
+            try:
+                reader = csv.reader(csvfile)
+                for row in reader:
+                    if count == 0:
+                        count += 1
+                        continue
+                    title = row[0]
+                    description = row[1]
+                    link = row[2]
+                    doc = {
+                        "title": title,
+                        "description": description,
+                        "link": link,
+                        "timestamp": datetime.now()
+                    }
+                    count += 1
+                    docs[count] = doc
+                    if count % BATCH == 0:
+                        yield docs
+                        docs = {}
+                    if count % 5000 == 0:
+                        print(f"Processing document {count}")
+            except Exception as e:
+                print(e)
+                print("title: ", title)
+                
+        yield docs
+        print(f"Processing document {count}")
+        print("done")
 
     def fill_index(self, index_name, file_name):
         try:
             print("Indexing documents...")
-            print(os.getcwd())
 
-            count = 0
-            for root, dirs, files in os.walk(file_name):
-
-                for file in files:
-                    with open(os.path.join(root, file), "r", encoding="utf-8") as f:
-                        try:
-                            title = file
-                            text = f.read()
-                            doc = {
-                                "title": title,
-                                "text": text,
-                                "timestamp": datetime.now()
-                            }
-                            count += 1
-                            self.client.index(index="document_index", id=count, document=doc)
-                            if count % 5000 == 0:
-                                print(f"Processing document {count}")
-
-                        except Exception as e:
-                            print(e)
-                            print("title: ", title)
-                            break
-            print(f"Processing document {count}")
-            print("done")
+            for i in self.csv_loop(file_name):
+                
+                body = list(chain.from_iterable(({"index": {"_index": index_name, "_id":j}}, k) for (j,k) in i.items()))
+                
+                resp = self.client.bulk(body=body)
+                    
         except Exception as e:
             print("Error while indexing")
             print(e)
@@ -73,19 +91,24 @@ class Server:
 
 
 # App Implementation
-es_server = Server("document_index", "../davisWiki")
+es_server = Server()
 
 @app.route('/api/search', methods=['POST'])
 def search():
     data = request.get_json()
-    print("DATA: ", data)
+    print("Request: ", data)
     index_name = data.get('index_name')
     query = data.get('query')
-    body={"query": {
-        "match": {
-            "text": query
-    }}, "size": 30, "explain": True}
+    body = {
+        "query": {
+            "query_string": {
+                "query": query
+            }
+        },
+        "size": 10000
+    }
     response = es_server.search(index_name, body)
+    print(response["hits"]["hits"][0]["_source"]["title"])
     return jsonify(dict(response))
 
 if __name__ == '__main__':
