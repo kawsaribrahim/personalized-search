@@ -22,7 +22,7 @@ import sys
 import os
 
 try:
-    from config import *
+    from config import address, fingerprint, password
 except ImportError:
     print("Error: config.py not found")
     sys.exit(1)
@@ -36,6 +36,7 @@ try:
     
     count = 0
     for root, dirs, files in os.walk("../davisWiki"):
+        
         for file in files:
             with open(os.path.join(root, file), "r", encoding="utf-8") as f:
                 try:
