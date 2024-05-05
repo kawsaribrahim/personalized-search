@@ -59,7 +59,7 @@ export default {
       selectedResult: null,
       searchResults: [], // Array to hold search results
       FLASK_SERVER_URL: 'http://127.0.0.1:5000',
-      INDEX_NAME: 'document_index'
+      INDEX_NAME: 'wiki_index'
     };
   },
   methods: {
