@@ -44,6 +44,8 @@ class Server:
 
         self.index_name = index
         self.client = Elasticsearch(address, ssl_assert_fingerprint=fingerprint, basic_auth=("elastic", password))
+        info = self.client.info()
+        print("Elasticsearch version:", info['version']['number'])
         
         if self.client.indices.exists(index=self.index_name):
             if (input("Do you want to delete the current index and create a new one? (y/n) ") in "yY"):
@@ -104,7 +106,10 @@ class Server:
                         "title": title,
                         "description": description,
                         "link": link,
-                        "timestamp": datetime.now()
+                        "timestamp": datetime.now(),
+                        "p1": "0.0",
+                        "p2": "0.0",
+                        "p3": "0.0",
                     }
                     count += 1
                     docs[count] = doc
@@ -139,9 +144,9 @@ class Server:
     def search(self, index_name, query):
         response = self.client.search(index=index_name, body=query)
         
-        print(query["query"]["script_score"]["query"]["match"]["text"])
+        print(query["query"]["script_score"]["query"]["match"]["description"])
         # log query
-        self.log_query(1, query["query"]["script_score"]["query"]["match"]["text"])
+        self.log_query(1, query["query"]["script_score"]["query"]["match"]["description"])
 
         return response
     
@@ -171,18 +176,17 @@ def search():
     index_name = data.get('index_name')
     query = data.get('query')
     
-    body={"query": {
-        "script_score": {
-            "query": {
-                "match": {
-                    "text": query
+    body = {
+        "query": {
+            "script_score": {
+                "query": {
+                    "match": { "description": query }
+                },
+                "script": {
+                    "source": "_score + 1 * doc['p1'].value + 0 * doc['p2'].value + 0 * doc['p3'].value"
                 }
-            },
-            "script": {
-                "source": "_score + 1 * doc['p1'].value + 0 * doc['p2'].value + 0 * doc['p3'].value"
             }
-        }
-    }, "size": 100, "explain": True}    
+        }, "size": 10000}    
     
     response = es_server.search(index_name, body)
 
@@ -194,10 +198,13 @@ def search():
 def log_click():
     # To-Do: Current assumption is user 1 is logging
     data = request.get_json()
+    print("Request: ", data)
+    user = data.get('user')
+    
     print("Clicked detected:")
     pprint(data["result"]["_id"])
     
-    es_server.log_click(1, data["result"]["_id"])
+    es_server.log_click(user, data["result"]["_id"])
     
     return jsonify({"status": "success"})
     

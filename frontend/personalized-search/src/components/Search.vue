@@ -20,7 +20,7 @@
               v-for="result in searchResults"
               :key="result.id"
             >
-              <td @click="showResult(result); logClick(result)" class="clickable content-center pt-3">
+              <td @click="showResult(result)" class="clickable content-center pt-3">
                 {{ result._source.title }},
                 <v-spacer/>
                 {{ result._score }}
@@ -97,7 +97,7 @@ export default {
     },
     showResult(result) {
       this.selectedResult = result
-      // TO-DO: Store in vuex store for each user
+      this.logClick(result)
     },
     logClick(result) {
       try {
@@ -111,6 +111,7 @@ export default {
             result: result,
           }),
         });
+        console.log('Clicked search result: ', result)
       } catch (error) {
         console.error('Error logging click:', error);
       }

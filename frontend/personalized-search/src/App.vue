@@ -36,7 +36,7 @@
     </v-app-bar>
 
     <v-main class="mt-3">
-      <Search @user="user"/>
+      <Search :user="user"/>
     </v-main>
   </v-app>
 </template>
@@ -54,9 +54,12 @@ export default {
   data: () => ({
     user: '',
   }),
+  mounted() {
+    this.user = 'user1';
+    console.log('Current User: ', this.user)
+  },
   methods: {
     changeUser(otherUser) {
-      //TO-DO: save user info
       this.user = otherUser
       console.log("Changed user to", otherUser)
     }
