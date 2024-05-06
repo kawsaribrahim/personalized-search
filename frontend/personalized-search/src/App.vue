@@ -6,7 +6,7 @@
       dark
     >
       <div class="d-flex align-center">
-        <v-icon large class="mx-2" >mdi-movie-search</v-icon>
+        <v-icon large class="mx-2" >mdi-search-web</v-icon>
         <b>P-search</b>
       </div>
 
