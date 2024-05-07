@@ -16,4 +16,4 @@ enrollment = "eyJ2ZXIiOiI4LjEzLjIiLCJhZHIiOlsiMTcyLjE4LjAuMzo5MjAwIl0sImZnciI6Ij
 index = 'wiki_index'
 
 # file containing the data being saved in the index:
-data_file = '../data.csv'
+data_file = '../data_with_cat.csv'

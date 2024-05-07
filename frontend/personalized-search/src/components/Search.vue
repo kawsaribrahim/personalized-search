@@ -50,7 +50,7 @@
 export default {
   name: 'SearchView',
   props: {
-        user: String,
+        userID: Number,
       },
   data() {
     return {
@@ -83,7 +83,8 @@ export default {
           },
           body: JSON.stringify({
             index_name: this.INDEX_NAME,
-            query: this.query
+            query: this.query,
+            userID: this.userID,
           }),
         });
         const data = await response.json();
@@ -97,7 +98,24 @@ export default {
     },
     showResult(result) {
       this.selectedResult = result
-      // TO-DO: Store in vuex store for each user
+      this.logClick(result)
+    },
+    logClick(result) {
+      try {
+        fetch(`${this.FLASK_SERVER_URL}/api/click`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userID: this.userID,
+            result: result,
+          }),
+        });
+        console.log('Clicked search result: ', result)
+      } catch (error) {
+        console.error('Error logging click:', error);
+      }
     }
   }
 };

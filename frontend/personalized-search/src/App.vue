@@ -13,21 +13,21 @@
       <v-spacer></v-spacer>
 
       <v-btn
-        @click="changeUser('user1')"
+        @click="changeUser(1)"
         text
       >
         <v-icon>mdi-</v-icon>
         <span>User 1</span>
       </v-btn>
       <v-btn
-        @click="changeUser('user2')"
+        @click="changeUser(2)"
         text
       >
         <v-icon>mdi-</v-icon>
         <span class="">User 2</span>
       </v-btn>
       <v-btn
-        @click="changeUser('user3')"
+        @click="changeUser(3)"
         text
       >
         <v-icon>mdi-</v-icon>
@@ -36,7 +36,7 @@
     </v-app-bar>
 
     <v-main class="mt-3">
-      <Search @user="user"/>
+      <Search :userID="userID"/>
     </v-main>
   </v-app>
 </template>
@@ -52,12 +52,15 @@ export default {
   },
 
   data: () => ({
-    user: '',
+    userID: null,
   }),
+  mounted() {
+    this.userID = 1;
+    console.log('Current User: ', this.userID)
+  },
   methods: {
     changeUser(otherUser) {
-      //TO-DO: save user info
-      this.user = otherUser
+      this.userID = otherUser
       console.log("Changed user to", otherUser)
     }
   }
