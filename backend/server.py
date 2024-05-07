@@ -9,6 +9,13 @@ import sqlite3
 import sys
 from pprint import pprint
 import csv
+maxInt = sys.maxsize
+while True:
+    try:
+        csv.field_size_limit(maxInt)
+        break
+    except OverflowError:
+        maxInt = int(maxInt/10)
 
 app = Flask(__name__)
 cors = CORS(app, resources={r"/api/*": {"origins": "http://localhost:8080"}})
@@ -37,7 +44,7 @@ class Server:
     def __init__(self):
 
         try:
-            from config import data_file, index, address, fingerprint, password
+            from config import data_files, index, address, fingerprint, password
         except ImportError:
             print("Server Error: config.py not found")
             sys.exit(1)
@@ -50,9 +57,9 @@ class Server:
         if self.client.indices.exists(index=self.index_name):
             if (input("Do you want to delete the current index and create a new one? (y/n) ") in "yY"):
                 self.client.indices.delete(index=self.index_name)
-                self.create_fill(self.index_name, data_file)
+                self.create_fill(self.index_name, data_files)
         else:
-            self.create_fill(self.index_name, data_file)
+            self.create_fill(self.index_name, data_files)
         
         if (len(hist_cur.execute("SELECT HISTORY_ID FROM history").fetchall()) != 0 or
            len(quer_cur.execute("SELECT QUERY_ID FROM queries").fetchall()) != 0):
@@ -65,7 +72,7 @@ class Server:
             print("There are ", len(hist_cur.execute("SELECT HISTORY_ID FROM history").fetchall()), " entries in the history table.")
             print("There are ", len(quer_cur.execute("SELECT QUERY_ID FROM queries").fetchall()), " entries in the query table.")
     
-    def create_fill(self, index_name, file_name):
+    def create_fill(self, index_name, file_names):
         
         body = {
             "mappings": {
@@ -85,55 +92,58 @@ class Server:
         resp = self.client.indices.create(index=index_name, body=body)
         print("Index created successfully.")
         print(resp)
-        self.fill_index(index_name, file_name)
+        self.fill_index(index_name, file_names)
         self.client.indices.refresh(index=index_name)
     
-    def csv_loop(self, file_name):
+    def csv_loop(self, file_names):
         count = 0
         docs = {}
         BATCH = 800
         
-        with open(file_name, 'r', newline='', encoding="utf-8") as csvfile:
-            try:
-                reader = csv.reader(csvfile)
-                for row in reader:
-                    if count == 0:
+        for file_name in file_names:
+            with open(file_name, 'r', newline='', encoding="utf-8") as csvfile:
+                try:
+                    reader = csv.reader(csvfile)
+                    flag = True
+                    for row in reader:
+                        # Skip the first row (header)
+                        if flag:
+                            flag = False
+                            continue
+                        title = row[0]
+                        description = row[1]
+                        link = row[2]
+                        category = literal_eval(row[3])
+                        doc = {
+                            "title": title,
+                            "description": description,
+                            "link": link,
+                            "category": {i: 1 for i in category},
+                            "timestamp": datetime.now(),
+                            "p1": "0.0",
+                            "p2": "0.0",
+                            "p3": "0.0"
+                        }
                         count += 1
-                        continue
-                    title = row[0]
-                    description = row[1]
-                    link = row[2]
-                    category = literal_eval(row[3])
-                    doc = {
-                        "title": title,
-                        "description": description,
-                        "link": link,
-                        "category": {i: 1 for i in category},
-                        "timestamp": datetime.now(),
-                        "p1": "0.0",
-                        "p2": "0.0",
-                        "p3": "0.0"
-                    }
-                    count += 1
-                    docs[count] = doc
-                    if count % BATCH == 0:
-                        yield docs
-                        docs = {}
-                    if count % 5000 == 0:
-                        print(f"Processing document {count}")
-            except Exception as e:
-                print(e)
-                print("title: ", title)
+                        docs[count] = doc
+                        if count % BATCH == 0:
+                            yield docs
+                            docs = {}
+                        if count % 5000 == 0:
+                            print(f"Processing document {count}")
+                except Exception as e:
+                    print(e)
+                    print("title: ", title)
                 
         yield docs
         print(f"Processing document {count}")
         print("done")
 
-    def fill_index(self, index_name, file_name):
+    def fill_index(self, index_name, file_names):
         try:
             print("Indexing documents...")
 
-            for i in self.csv_loop(file_name):
+            for i in self.csv_loop(file_names):
                 
                 body = list(chain.from_iterable(({"index": {"_index": index_name, "_id":j}}, k) for (j,k) in i.items()))
                 
@@ -194,11 +204,11 @@ def search():
                 {"match": {"description": query}}
             ],
             "should": [
-                {"rank_feature": {"field": "category."+ cat, "boost":score*0.75}} for (cat, score) in user_scores.items()
+                {"rank_feature": {"field": "category."+ cat, "boost":score*5}} for (cat, score) in user_scores.items()
             ]
         }
         
-    }, "size": 1000, "explain": True}    
+    }, "size": 300, "explain": True}    
     
     response = es_server.search(index_name, body, user_id)
 
