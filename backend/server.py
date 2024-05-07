@@ -44,6 +44,8 @@ class Server:
 
         self.index_name = index
         self.client = Elasticsearch(address, ssl_assert_fingerprint=fingerprint, basic_auth=("elastic", password))
+        info = self.client.info()
+        print("Elasticsearch version:", info['version']['number'])
         
         if self.client.indices.exists(index=self.index_name):
             if (input("Do you want to delete the current index and create a new one? (y/n) ") in "yY"):
@@ -142,11 +144,11 @@ class Server:
             print(e)
         print(f"Index '{index_name}' created successfully.")
 
-    def search(self, index_name, query):
+    def search(self, index_name, query, user):
         response = self.client.search(index=index_name, body=query)
         
         # log query
-        self.log_query(1, query["query"]["bool"]["must"][0]["match"]["description"])
+        self.log_query(user, query["query"]["bool"]["must"][0]["match"]["description"])
         
         return response
     
@@ -175,9 +177,11 @@ def search():
     print("Request: ", data)
     index_name = data.get('index_name')
     query = data.get('query')
+    user = int(data.get('user')[-1])
+    print("User: ", user)
     user_scores = {}
     
-    for article in hist_cur.execute("SELECT CATEGORIES FROM history WHERE USER_ID = 1").fetchall():
+    for article in hist_cur.execute("SELECT CATEGORIES FROM history WHERE USER_ID = " + str(user)).fetchall():
         for cat in literal_eval(article[0]):
             if cat in user_scores:
                 user_scores[cat] += 1
@@ -194,9 +198,9 @@ def search():
             ]
         }
         
-    }, "size": 100, "explain": True}    
+    }, "size": 1000, "explain": True}    
     
-    response = es_server.search(index_name, body)
+    response = es_server.search(index_name, body, user)
 
     return jsonify(dict(response))
 
@@ -205,10 +209,14 @@ def search():
 def log_click():
     # To-Do: Current assumption is user 1 is logging
     data = request.get_json()
+    print("Request: ", data)
+    user = int(data.get('user')[-1])
+    print("User: ", user)
+    
     print("Clicked detected:")
     pprint(data["result"]["_id"])
     
-    es_server.log_click(1, data["result"]["_id"], repr(list(data["result"]["_source"]["category"].keys())))
+    es_server.log_click(user, data["result"]["_id"], repr(list(data["result"]["_source"]["category"].keys())))
     
     return jsonify({"status": "success"})
     
