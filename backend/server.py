@@ -1,5 +1,5 @@
 from elasticsearch import Elasticsearch
-
+from ast import literal_eval
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
@@ -17,7 +17,7 @@ cors = CORS(app, resources={r"/api/*": {"origins": "http://localhost:8080"}})
 history_db = sqlite3.connect("history.db", check_same_thread=False)
 hist_cur = history_db.cursor()
 if len(hist_cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='history'").fetchall()) == 0:
-    hist_cur.execute("CREATE TABLE history (HISTORY_ID INTEGER PRIMARY KEY AUTOINCREMENT, USER_ID INTEGER, ARTICLE INTEGER)")
+    hist_cur.execute("CREATE TABLE history (HISTORY_ID INTEGER PRIMARY KEY AUTOINCREMENT, USER_ID INTEGER, ARTICLE INTEGER, CATEGORIES TEXT)")
     history_db.commit()
 
 # Database to store query histories
@@ -72,6 +72,7 @@ class Server:
                     "description": {"type": "text"},
                     "link": {"type": "text"},
                     "timestamp": {"type": "date"},
+                    "category": {"type": "rank_features"},
                     "p1": {"type": "float"},
                     "p2": {"type": "float"},
                     "p3": {"type": "float"}
@@ -100,11 +101,16 @@ class Server:
                     title = row[0]
                     description = row[1]
                     link = row[2]
+                    category = literal_eval(row[3])
                     doc = {
                         "title": title,
                         "description": description,
                         "link": link,
-                        "timestamp": datetime.now()
+                        "category": {i: 1 for i in category},
+                        "timestamp": datetime.now(),
+                        "p1": "0.0",
+                        "p2": "0.0",
+                        "p3": "0.0"
                     }
                     count += 1
                     docs[count] = doc
@@ -139,10 +145,9 @@ class Server:
     def search(self, index_name, query):
         response = self.client.search(index=index_name, body=query)
         
-        print(query["query"]["script_score"]["query"]["match"]["text"])
         # log query
-        self.log_query(1, query["query"]["script_score"]["query"]["match"]["text"])
-
+        self.log_query(1, query["query"]["bool"]["must"][0]["match"]["description"])
+        
         return response
     
     def log_query(self, user, query):
@@ -152,9 +157,9 @@ class Server:
         
         print("There are ", len(quer_cur.execute("SELECT QUERY_ID FROM queries").fetchall()), " entries in the query table.")
 
-    def log_click(self, user, result):
+    def log_click(self, user, result, categories):
         hist_cur = history_db.cursor()
-        hist_cur.execute("INSERT INTO history (USER_ID, ARTICLE) VALUES (?, ?)", (user, result))
+        hist_cur.execute("INSERT INTO history (USER_ID, ARTICLE, CATEGORIES) VALUES (?, ?, ?)", (user, result, categories))
         history_db.commit()
         
         print("There are ", len(hist_cur.execute("SELECT HISTORY_ID FROM history").fetchall()), " entries in the history table.")
@@ -170,22 +175,28 @@ def search():
     print("Request: ", data)
     index_name = data.get('index_name')
     query = data.get('query')
+    user_scores = {}
+    
+    for article in hist_cur.execute("SELECT CATEGORIES FROM history WHERE USER_ID = 1").fetchall():
+        for cat in literal_eval(article[0]):
+            if cat in user_scores:
+                user_scores[cat] += 1
+            else:
+                user_scores[cat] = 1
     
     body={"query": {
-        "script_score": {
-            "query": {
-                "match": {
-                    "text": query
-                }
-            },
-            "script": {
-                "source": "_score + 1 * doc['p1'].value + 0 * doc['p2'].value + 0 * doc['p3'].value"
-            }
+        "bool": {
+            "must": [
+                {"match": {"description": query}}
+            ],
+            "should": [
+                {"rank_feature": {"field": "category."+ cat, "boost":score*0.75}} for (cat, score) in user_scores.items()
+            ]
         }
+        
     }, "size": 100, "explain": True}    
     
     response = es_server.search(index_name, body)
-
 
     return jsonify(dict(response))
 
@@ -197,7 +208,7 @@ def log_click():
     print("Clicked detected:")
     pprint(data["result"]["_id"])
     
-    es_server.log_click(1, data["result"]["_id"])
+    es_server.log_click(1, data["result"]["_id"], repr(list(data["result"]["_source"]["category"].keys())))
     
     return jsonify({"status": "success"})
     
