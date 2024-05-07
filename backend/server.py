@@ -82,9 +82,9 @@ class Server:
                     "link": {"type": "text"},
                     "timestamp": {"type": "date"},
                     "category": {"type": "rank_features"},
-                    "p1": {"type": "float"},
-                    "p2": {"type": "float"},
-                    "p3": {"type": "float"}
+                    "p1": {"type": "rank_feature"},
+                    "p2": {"type": "rank_feature"},
+                    "p3": {"type": "rank_feature"}
                 }
             }
         }
@@ -120,9 +120,9 @@ class Server:
                             "link": link,
                             "category": {i: 1 for i in category},
                             "timestamp": datetime.now(),
-                            "p1": "0.0",
-                            "p2": "0.0",
-                            "p3": "0.0"
+                            "p1": 1,
+                            "p2": 1,
+                            "p3": 1
                         }
                         count += 1
                         docs[count] = doc
@@ -158,15 +158,25 @@ class Server:
         response = self.client.search(index=index_name, body=query)
         
         # log query
-        self.log_query(user_id, query["query"]["bool"]["must"][0]["match"]["description"])
+        self.log_query(user_id, query["query"]["bool"]["must"][0]["match"]["description"], response)
+        
+        body = list(chain.from_iterable(({"update": {"_index": index_name, "_id":i["_id"]}}, 
+                                         {"script": {
+                                             "source": f"ctx._source.p{user_id} = ctx._source.p{user_id}+ 1",
+                                             "lang": "painless"
+                                             }}) for i in response["hits"]["hits"]))
+        
+        resp = self.client.bulk(body=body)
+        print(resp)
         
         return response
     
-    def log_query(self, user_id, query):
+    def log_query(self, user_id, query, response):
+        
         quer_cur = query_db.cursor()
         quer_cur.execute("INSERT INTO queries (USER_ID, QUERY) VALUES (?, ?)", (user_id, query))
         query_db.commit()
-        
+    
         print("There are ", len(quer_cur.execute("SELECT QUERY_ID FROM queries").fetchall()), " entries in the query table.")
 
     def log_click(self, user_id, result, categories):
@@ -191,6 +201,9 @@ def search():
     print("User: ", user_id)
     user_scores = {}
     
+    print("There are ", len(hist_cur.execute("SELECT HISTORY_ID FROM history").fetchall()), " entries in the history table.")
+
+    
     for article in hist_cur.execute("SELECT CATEGORIES FROM history WHERE USER_ID = " + str(user_id)).fetchall():
         for cat in literal_eval(article[0]):
             if cat in user_scores:
@@ -198,19 +211,25 @@ def search():
             else:
                 user_scores[cat] = 1
     
+    print("User scores: ", user_scores)
+                
+    should = ([{"rank_feature": {"field": "category."+ cat, "boost":score*5}} for (cat, score) in user_scores.items()] +
+              [{"rank_feature": {"field": "p"+str(user_id), "boost": 50}}])
+    
+    print("Should: ", should)
+    
     body={"query": {
         "bool": {
             "must": [
                 {"match": {"description": query}}
             ],
-            "should": [
-                {"rank_feature": {"field": "category."+ cat, "boost":score*5}} for (cat, score) in user_scores.items()
-            ]
+            "should": should,
         }
         
     }, "size": 300, "explain": True}    
     
     response = es_server.search(index_name, body, user_id)
+    print("Response: ", response["hits"]["hits"][0]["_explanation"])
 
     return jsonify(dict(response))
 
