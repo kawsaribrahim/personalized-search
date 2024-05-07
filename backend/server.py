@@ -144,24 +144,24 @@ class Server:
             print(e)
         print(f"Index '{index_name}' created successfully.")
 
-    def search(self, index_name, query, user):
+    def search(self, index_name, query, user_id):
         response = self.client.search(index=index_name, body=query)
         
         # log query
-        self.log_query(user, query["query"]["bool"]["must"][0]["match"]["description"])
+        self.log_query(user_id, query["query"]["bool"]["must"][0]["match"]["description"])
         
         return response
     
-    def log_query(self, user, query):
+    def log_query(self, user_id, query):
         quer_cur = query_db.cursor()
-        quer_cur.execute("INSERT INTO queries (USER_ID, QUERY) VALUES (?, ?)", (user, query))
+        quer_cur.execute("INSERT INTO queries (USER_ID, QUERY) VALUES (?, ?)", (user_id, query))
         query_db.commit()
         
         print("There are ", len(quer_cur.execute("SELECT QUERY_ID FROM queries").fetchall()), " entries in the query table.")
 
-    def log_click(self, user, result, categories):
+    def log_click(self, user_id, result, categories):
         hist_cur = history_db.cursor()
-        hist_cur.execute("INSERT INTO history (USER_ID, ARTICLE, CATEGORIES) VALUES (?, ?, ?)", (user, result, categories))
+        hist_cur.execute("INSERT INTO history (USER_ID, ARTICLE, CATEGORIES) VALUES (?, ?, ?)", (user_id, result, categories))
         history_db.commit()
         
         print("There are ", len(hist_cur.execute("SELECT HISTORY_ID FROM history").fetchall()), " entries in the history table.")
@@ -177,11 +177,11 @@ def search():
     print("Request: ", data)
     index_name = data.get('index_name')
     query = data.get('query')
-    user = int(data.get('user')[-1])
-    print("User: ", user)
+    user_id = data.get('userID')
+    print("User: ", user_id)
     user_scores = {}
     
-    for article in hist_cur.execute("SELECT CATEGORIES FROM history WHERE USER_ID = " + str(user)).fetchall():
+    for article in hist_cur.execute("SELECT CATEGORIES FROM history WHERE USER_ID = " + str(user_id)).fetchall():
         for cat in literal_eval(article[0]):
             if cat in user_scores:
                 user_scores[cat] += 1
@@ -200,23 +200,22 @@ def search():
         
     }, "size": 1000, "explain": True}    
     
-    response = es_server.search(index_name, body, user)
+    response = es_server.search(index_name, body, user_id)
 
     return jsonify(dict(response))
 
 
 @app.route('/api/click', methods=['POST'])
 def log_click():
-    # To-Do: Current assumption is user 1 is logging
     data = request.get_json()
     print("Request: ", data)
-    user = int(data.get('user')[-1])
-    print("User: ", user)
+    user_id = data.get('userID')
+    print("User: ", user_id)
     
     print("Clicked detected:")
     pprint(data["result"]["_id"])
     
-    es_server.log_click(user, data["result"]["_id"], repr(list(data["result"]["_source"]["category"].keys())))
+    es_server.log_click(user_id, data["result"]["_id"], repr(list(data["result"]["_source"]["category"].keys())))
     
     return jsonify({"status": "success"})
     

@@ -50,7 +50,7 @@
 export default {
   name: 'SearchView',
   props: {
-        user: String,
+        userID: Number,
       },
   data() {
     return {
@@ -84,7 +84,7 @@ export default {
           body: JSON.stringify({
             index_name: this.INDEX_NAME,
             query: this.query,
-            user: this.user,
+            userID: this.userID,
           }),
         });
         const data = await response.json();
@@ -108,7 +108,7 @@ export default {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            user: this.user,
+            userID: this.userID,
             result: result,
           }),
         });
