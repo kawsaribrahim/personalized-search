@@ -213,8 +213,8 @@ def search():
     
     print("User scores: ", user_scores)
                 
-    should = ([{"rank_feature": {"field": "category."+ cat, "boost":score*5}} for (cat, score) in user_scores.items()] +
-              [{"rank_feature": {"field": "p"+str(user_id), "boost": 50}}])
+    should = ([{"rank_feature": {"field": "category."+ cat, "boost":score}} for (cat, score) in user_scores.items()] +
+              [{"rank_feature": {"field": "p"+str(user_id), "boost": 20}}])
     
     print("Should: ", should)
     
