@@ -209,12 +209,8 @@ def search():
         "bool": {
             "must": [
                 {"match": {"description": query}}
-<<<<<<< HEAD
             ],
             "should": should
-=======
-            ]
->>>>>>> ae4550f805a8cdee0e15395e3c26b7477b66b293
         }
         
     }, "size": 300, "explain": True}    
