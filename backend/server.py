@@ -34,8 +34,6 @@ if len(quer_cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND n
     quer_cur.execute("CREATE TABLE queries (QUERY_ID INTEGER PRIMARY KEY AUTOINCREMENT, USER_ID INTEGER, QUERY TEXT)")
     query_db.commit()
 
-print(quer_cur.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
-
 class Server:
     """ 
     A Server class to interact with the elastic search server
@@ -91,7 +89,6 @@ class Server:
         
         resp = self.client.indices.create(index=index_name, body=body)
         print("Index created successfully.")
-        print(resp)
         self.fill_index(index_name, file_names)
         self.client.indices.refresh(index=index_name)
     
@@ -167,7 +164,6 @@ class Server:
                                              }}) for i in response["hits"]["hits"]))
         
         resp = self.client.bulk(body=body)
-        print(resp)
         
         return response
     
@@ -194,15 +190,10 @@ es_server = Server()
 @app.route('/api/search', methods=['POST'])
 def search():
     data = request.get_json()
-    print("Request: ", data)
     index_name = data.get('index_name')
     query = data.get('query')
     user_id = data.get('userID')
-    print("User: ", user_id)
     user_scores = {}
-    
-    print("There are ", len(hist_cur.execute("SELECT HISTORY_ID FROM history").fetchall()), " entries in the history table.")
-
     
     for article in hist_cur.execute("SELECT CATEGORIES FROM history WHERE USER_ID = " + str(user_id)).fetchall():
         for cat in literal_eval(article[0]):
@@ -210,26 +201,20 @@ def search():
                 user_scores[cat] += 1
             else:
                 user_scores[cat] = 1
-    
-    print("User scores: ", user_scores)
                 
     should = ([{"rank_feature": {"field": "category."+ cat, "boost":score*5}} for (cat, score) in user_scores.items()] +
               [{"rank_feature": {"field": "p"+str(user_id), "boost": 50}}])
-    
-    print("Should: ", should)
     
     body={"query": {
         "bool": {
             "must": [
                 {"match": {"description": query}}
-            ],
-            "should": should,
+            ]
         }
         
     }, "size": 300, "explain": True}    
     
     response = es_server.search(index_name, body, user_id)
-    print("Response: ", response["hits"]["hits"][0]["_explanation"])
 
     return jsonify(dict(response))
 
@@ -237,12 +222,7 @@ def search():
 @app.route('/api/click', methods=['POST'])
 def log_click():
     data = request.get_json()
-    print("Request: ", data)
     user_id = data.get('userID')
-    print("User: ", user_id)
-    
-    print("Clicked detected:")
-    pprint(data["result"]["_id"])
     
     es_server.log_click(user_id, data["result"]["_id"], repr(list(data["result"]["_source"]["category"].keys())))
     
