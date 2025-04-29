@@ -1,4 +1,6 @@
 # personalized-search
+A personalized search engine on wiki articles using Elasticsearch. Also using Jupyter, Docker, Flask and Vue.js(+ Node.js).
+As a group project in a search engines and information retrieval systems course.
 
 ## Project setup
 Put all the relevant values in `backend/config.py`.
